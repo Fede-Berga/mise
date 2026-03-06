@@ -1,4 +1,3 @@
-from typing import List
 
 from pydantic import BaseModel
 
@@ -17,9 +16,9 @@ class GeneratedMenuItem(BaseModel):
 
 class GeneratedCategory(BaseModel):
     name: str
-    items: List[GeneratedMenuItem]
+    items: list[GeneratedMenuItem]
 
 
 class MenuGenResponse(BaseModel):
-    categories: List[GeneratedCategory]
+    categories: list[GeneratedCategory]
 

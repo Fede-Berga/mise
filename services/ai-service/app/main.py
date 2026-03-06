@@ -1,6 +1,5 @@
-from fastapi import Depends, FastAPI
-
 from common.app.auth import get_current_user
+from fastapi import Depends, FastAPI
 
 from .api.controllers.menu_gen_controller import router as menu_gen_router
 

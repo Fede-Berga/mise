@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, status
 
-from ..api.schemas import MenuGenRequest, MenuGenResponse, GeneratedCategory, GeneratedMenuItem
+from ..api.schemas import GeneratedCategory, GeneratedMenuItem, MenuGenRequest, MenuGenResponse
 
 router = APIRouter()
 
@@ -75,5 +75,4 @@ async def generate_menu(request: MenuGenRequest) -> MenuGenResponse:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI menu generation failed: {exc}",
-        )
-
+        ) from exc
