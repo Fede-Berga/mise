@@ -1,0 +1,615 @@
+services:
+  # ── Core Infrastructure ─────────────────────────────────────
+  postgres:
+    image: postgres:17
+    container_name: mise-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      POSTGRES_DB: ${POSTGRES_DB:-mise}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mise"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: mise-dragonfly
+    command:
+      - "--logtostderr"
+      - "--proactor_threads=1"
+      - "--num_shards=1"
+      - "--maxmemory=256mb"
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  nats:
+    image: nats:2.11
+    container_name: mise-nats
+    command:
+      - "-js"
+      - "-sd"
+      - "/data"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--signal", "ldm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    container_name: mise-keycloak
+    command:
+      - start-dev
+      - --http-relative-path=/auth
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-mise}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      KC_HOSTNAME: localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  traefik:
+    image: traefik:v3.3
+    container_name: mise-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ── Extended Infrastructure ─────────────────────────────────
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-02-18T16-25-55Z
+    container_name: mise-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-mise}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-mise-minio}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.1
+    container_name: mise-clickhouse
+    ports:
+      - "8123:8123"
+      - "9009:9009"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    container_name: mise-meilisearch
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-mise-dev}
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ── Core Domain Services ────────────────────────────────────
+  restaurant-svc:
+    image: ghcr.io/mise-restaurant/restaurant-svc:dev
+    build:
+      context: .
+      dockerfile: services/restaurant-service/Dockerfile
+    environment:
+      SERVICE_NAME: restaurant-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: restaurant_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  menu-svc:
+    image: ghcr.io/mise-restaurant/menu-svc:dev
+    build:
+      context: .
+      dockerfile: services/menu-service/Dockerfile
+    environment:
+      SERVICE_NAME: menu-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: menu_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  order-svc:
+    image: ghcr.io/mise-restaurant/order-svc:dev
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    environment:
+      SERVICE_NAME: order-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: order_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  kitchen-svc:
+    image: ghcr.io/mise-restaurant/kitchen-svc:dev
+    build:
+      context: .
+      dockerfile: services/kitchen-service/Dockerfile
+    environment:
+      SERVICE_NAME: kitchen-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: kitchen_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  inventory-svc:
+    image: ghcr.io/mise-restaurant/inventory-svc:dev
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    environment:
+      SERVICE_NAME: inventory-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: inventory_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  personnel-svc:
+    image: ghcr.io/mise-restaurant/personnel-svc:dev
+    build:
+      context: .
+      dockerfile: services/personnel-service/Dockerfile
+    environment:
+      SERVICE_NAME: personnel-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: personnel_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  finance-svc:
+    image: ghcr.io/mise-restaurant/finance-svc:dev
+    build:
+      context: .
+      dockerfile: services/finance-service/Dockerfile
+    environment:
+      SERVICE_NAME: finance-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres:5432/${POSTGRES_DB:-mise}
+      DATABASE_SCHEMA: finance_svc
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise-master}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  notification-svc:
+    image: ghcr.io/mise-restaurant/notification-svc:dev
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment:
+      SERVICE_NAME: notification-service
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      nats:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  analytics-svc:
+    image: ghcr.io/mise-restaurant/analytics-svc:dev
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    environment:
+      SERVICE_NAME: analytics-service
+      CLICKHOUSE_URL: http://clickhouse:8123
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  ai-svc:
+    image: ghcr.io/mise-restaurant/ai-svc:dev
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    environment:
+      SERVICE_NAME: ai-service
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-replace-me}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  hardware-svc:
+    image: ghcr.io/mise-restaurant/hardware-svc:dev
+    build:
+      context: .
+      dockerfile: services/hardware-service/Dockerfile
+    environment:
+      SERVICE_NAME: hardware-service
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  mise-web:
+    image: ghcr.io/mise-restaurant/mise-web:dev
+    build:
+      context: ../..
+      dockerfile: mise-web/Dockerfile
+    environment:
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-mise-dev-secret}
+      NEXTAUTH_DEBUG: ${NEXTAUTH_DEBUG:-false}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://traefik}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/auth/realms/mise-master}
+      RESTAURANT_SVC_URL: http://restaurant-svc:8000
+      MENU_SVC_URL: http://menu-svc:8000
+      ORDER_SVC_URL: http://order-svc:8000
+      KITCHEN_SVC_URL: http://kitchen-svc:8000
+    depends_on:
+      traefik:
+        condition: service_healthy
+      restaurant-svc:
+        condition: service_healthy
+      menu-svc:
+        condition: service_healthy
+      order-svc:
+        condition: service_healthy
+      kitchen-svc:
+        condition: service_healthy
+      inventory-svc:
+        condition: service_healthy
+      personnel-svc:
+        condition: service_healthy
+      finance-svc:
+        condition: service_healthy
+      notification-svc:
+        condition: service_healthy
+      analytics-svc:
+        condition: service_healthy
+      ai-svc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.mise-web.rule: "Host(`app.local.mise`)"
+      traefik.http.routers.mise-web.entrypoints: "web"
+      traefik.http.services.mise-web.loadbalancer.server.port: "3000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  pg_data:
+  dragonfly_data:
+  nats_data:
+  minio_data:
+  clickhouse_data:
+  meili_data:
+
+networks:
+  default:
+    name: mise-full

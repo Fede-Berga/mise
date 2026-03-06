@@ -1,0 +1,89 @@
+/**
+ * Global stylesheet — imported once in app/layout.tsx.
+ *
+ * Responsibilities:
+ *  1. Tailwind base/components/utilities injection
+ *  2. Google Fonts import
+ *  3. CSS custom properties for design tokens (consumed by Tailwind theme)
+ *  4. Global resets and scrollbar styling
+ */
+
+/* ── Google Fonts ───────────────────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap");
+
+/* ── Tailwind layers ─────────────────────────────────────────────────────── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base resets ─────────────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    background-color: #0A0A0A;
+    color: #F5F5F5;
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  /* Styled scrollbar — keeps the dark aesthetic */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #141414;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2A2A2A;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #404040;
+  }
+}
+
+/* ── Reusable component layer ────────────────────────────────────────────── */
+@layer components {
+  /**
+   * .mise-card — base panel component.
+   * Usage: <div className="mise-card">...</div>
+   * Extend with: p-4, hover:border-mise-amber, etc.
+   */
+  .mise-card {
+    @apply bg-mise-surface border border-mise-border rounded-xl transition-colors duration-150;
+  }
+
+  /**
+   * .mise-input — base text input styling.
+   * Uses @tailwindcss/forms class strategy.
+   */
+  .mise-input {
+    @apply bg-mise-raised border border-mise-border rounded-lg px-3 py-2
+           text-mise-text text-sm placeholder:text-mise-text-faint
+           focus:outline-none focus:ring-2 focus:ring-mise-amber focus:border-transparent
+           transition-shadow duration-150 w-full;
+  }
+
+  /** .mise-label — form field label */
+  .mise-label {
+    @apply block text-xs font-medium text-mise-text-muted mb-1 tracking-wide uppercase;
+  }
+
+  /** .mise-divider — horizontal separator */
+  .mise-divider {
+    @apply w-full border-t border-mise-border;
+  }
+}

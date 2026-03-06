@@ -1,0 +1,567 @@
+services:
+  postgres-keycloak:
+    image: postgres:17-alpine
+    container_name: mise-postgres-keycloak
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      POSTGRES_DB: keycloak
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_keycloak_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mise} -d ${POSTGRES_DB:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  postgres-restaurant:
+    image: postgres:17-alpine
+    container_name: mise-postgres-restaurant
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      POSTGRES_DB: restaurant_db
+    volumes:
+      - pg_restaurant_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mise} -d ${POSTGRES_DB:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  postgres-menu:
+    image: postgres:17-alpine
+    container_name: mise-postgres-menu
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      POSTGRES_DB: menu_db
+    volumes:
+      - pg_menu_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mise} -d ${POSTGRES_DB:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  postgres-order:
+    image: postgres:17-alpine
+    container_name: mise-postgres-order
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      POSTGRES_DB: order_db
+    volumes:
+      - pg_order_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mise} -d ${POSTGRES_DB:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  postgres-kitchen:
+    image: postgres:17-alpine
+    container_name: mise-postgres-kitchen
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mise}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      POSTGRES_DB: kitchen_db
+    volumes:
+      - pg_kitchen_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mise} -d ${POSTGRES_DB:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: mise-dragonfly
+    command:
+      - "--logtostderr"
+      - "--proactor_threads=1"
+      - "--num_shards=1"
+      - "--maxmemory=256mb"
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: mise-nats
+    command:
+      - "-js"
+      - "-sd"
+      - "/data"
+      - "-m"
+      - "8222"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O- http://127.0.0.1:8222/healthz || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    container_name: mise-keycloak
+    command:
+      - start-dev
+      - --http-relative-path=/auth
+      - --import-realm
+    volumes:
+      - ../../infra/keycloak:/opt/keycloak/data/import:Z
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-keycloak:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-mise}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-mise}
+      KC_HOSTNAME: ${KC_HOSTNAME:-host.docker.internal}
+    depends_on:
+      postgres-keycloak:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  traefik:
+    image: traefik:v3.3
+    container_name: mise-traefik
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O- http://127.0.0.1:8080/ping || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  migrate-restaurant:
+    image: ghcr.io/mise-restaurant/restaurant-svc:dev
+    command: [ "sh", "-c", "alembic upgrade head" ]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-restaurant:5432/restaurant_db
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+    depends_on:
+      postgres-restaurant:
+        condition: service_healthy
+
+  migrate-menu:
+    image: ghcr.io/mise-restaurant/menu-svc:dev
+    command: [ "sh", "-c", "alembic upgrade head" ]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-menu:5432/menu_db
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+    depends_on:
+      postgres-menu:
+        condition: service_healthy
+
+  migrate-order:
+    image: ghcr.io/mise-restaurant/order-svc:dev
+    command: [ "sh", "-c", "alembic upgrade head" ]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-order:5432/order_db
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+    depends_on:
+      postgres-order:
+        condition: service_healthy
+
+  migrate-kitchen:
+    image: ghcr.io/mise-restaurant/kitchen-svc:dev
+    command: [ "sh", "-c", "alembic upgrade head" ]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-kitchen:5432/kitchen_db
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+    depends_on:
+      postgres-kitchen:
+        condition: service_healthy
+
+  seed-restaurant:
+    image: postgres:17-alpine
+    command:
+      - sh
+      - -c
+      - |
+        psql -v ON_ERROR_STOP=1 -h postgres-restaurant -U ${POSTGRES_USER:-mise} -d restaurant_db <<'SQL'
+        INSERT INTO restaurants (tenant_id, name, address, currency, timezone)
+        SELECT 'restaurant-0001', 'Mise Demo Restaurant', '123 Main St', 'EUR', 'Europe/Rome'
+        WHERE NOT EXISTS (SELECT 1 FROM restaurants WHERE tenant_id='restaurant-0001' AND name='Mise Demo Restaurant');
+        SQL
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-mise}
+    depends_on:
+      migrate-restaurant:
+        condition: service_completed_successfully
+
+  seed-menu:
+    image: postgres:17-alpine
+    command:
+      - sh
+      - -c
+      - |
+        psql -v ON_ERROR_STOP=1 -h postgres-menu -U ${POSTGRES_USER:-mise} -d menu_db <<'SQL'
+        INSERT INTO menu_items (tenant_id, name, description, price, category, is_available)
+        SELECT 'restaurant-0001', 'Margherita Pizza', 'Classic tomato and mozzarella', 12.50, 'Pizza', true
+        WHERE NOT EXISTS (SELECT 1 FROM menu_items WHERE tenant_id='restaurant-0001' AND name='Margherita Pizza');
+        INSERT INTO menu_items (tenant_id, name, description, price, category, is_available)
+        SELECT 'restaurant-0001', 'Caesar Salad', 'Romaine, parmesan, croutons', 8.00, 'Salads', true
+        WHERE NOT EXISTS (SELECT 1 FROM menu_items WHERE tenant_id='restaurant-0001' AND name='Caesar Salad');
+        INSERT INTO menu_items (tenant_id, name, description, price, category, is_available)
+        SELECT 'restaurant-0001', 'Espresso', 'Single shot', 2.50, 'Drinks', true
+        WHERE NOT EXISTS (SELECT 1 FROM menu_items WHERE tenant_id='restaurant-0001' AND name='Espresso');
+        INSERT INTO menu_items (tenant_id, name, description, price, category, is_available)
+        SELECT 'restaurant-0001', 'Tiramisu', 'Classic Italian dessert', 7.00, 'Desserts', true
+        WHERE NOT EXISTS (SELECT 1 FROM menu_items WHERE tenant_id='restaurant-0001' AND name='Tiramisu');
+        SQL
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-mise}
+    depends_on:
+      migrate-menu:
+        condition: service_completed_successfully
+
+  restaurant-svc:
+    image: ghcr.io/mise-restaurant/restaurant-svc:dev
+    build:
+      context: ../..
+      dockerfile: services/restaurant-service/Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      SERVICE_NAME: restaurant-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-restaurant:5432/restaurant_db
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      migrate-restaurant:
+        condition: service_completed_successfully
+      postgres-restaurant:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.restaurant-svc.rule: "Host(`api.local.mise`)"
+      traefik.http.routers.restaurant-svc.entrypoints: "web"
+      traefik.http.services.restaurant-svc.loadbalancer.server.port: "8000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  menu-svc:
+    image: ghcr.io/mise-restaurant/menu-svc:dev
+    build:
+      context: ../..
+      dockerfile: services/menu-service/Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      SERVICE_NAME: menu-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-menu:5432/menu_db
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      migrate-menu:
+        condition: service_completed_successfully
+      postgres-menu:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  order-svc:
+    image: ghcr.io/mise-restaurant/order-svc:dev
+    build:
+      context: ../..
+      dockerfile: services/order-service/Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      SERVICE_NAME: order-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-order:5432/order_db
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+      MENU_SVC_URL: http://menu-svc:8000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      migrate-order:
+        condition: service_completed_successfully
+      postgres-order:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  kitchen-svc:
+    image: ghcr.io/mise-restaurant/kitchen-svc:dev
+    build:
+      context: ../..
+      dockerfile: services/kitchen-service/Dockerfile
+    ports:
+      - "8004:8000"
+    environment:
+      SERVICE_NAME: kitchen-service
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mise}:${POSTGRES_PASSWORD:-mise}@postgres-kitchen:5432/kitchen_db
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      REDIS_URL: ${REDIS_URL:-redis://dragonfly:6379/0}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-mise}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      migrate-kitchen:
+        condition: service_completed_successfully
+      postgres-kitchen:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  mise-web:
+    image: ghcr.io/mise-restaurant/mise-web:dev
+    build:
+      context: ../..
+      dockerfile: mise-web/Dockerfile
+    environment:
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-mise-dev-secret}
+      NEXTAUTH_DEBUG: ${NEXTAUTH_DEBUG:-false}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://traefik}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://host.docker.internal:8080/auth/realms/mise}
+      RESTAURANT_SVC_URL: http://restaurant-svc:8000
+      MENU_SVC_URL: http://menu-svc:8000
+      ORDER_SVC_URL: http://order-svc:8000
+      KITCHEN_SVC_URL: http://kitchen-svc:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      traefik:
+        condition: service_healthy
+      restaurant-svc:
+        condition: service_healthy
+      menu-svc:
+        condition: service_healthy
+      order-svc:
+        condition: service_healthy
+      kitchen-svc:
+        condition: service_healthy
+      seed-restaurant:
+        condition: service_completed_successfully
+      seed-menu:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:3000/ || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.mise-web.rule: "Host(`localhost`)"
+      traefik.http.routers.mise-web.entrypoints: "web"
+      traefik.http.services.mise-web.loadbalancer.server.port: "3000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  mise-docs:
+    image: ghcr.io/mise-restaurant/mise-docs:dev
+    build:
+      context: ../..
+      dockerfile: docs/Dockerfile
+    ports:
+      - "${DOCS_PORT:-3010}:80"
+    depends_on:
+      traefik:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O- http://localhost/ >/dev/null || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.mise-docs.rule: "Host(`localhost`) && PathPrefix(`/docs`)"
+      traefik.http.routers.mise-docs.entrypoints: "web"
+      traefik.http.routers.mise-docs.priority: "100"
+      traefik.http.middlewares.mise-docs-strip.stripprefix.prefixes: "/docs"
+      traefik.http.routers.mise-docs.middlewares: "mise-docs-strip"
+      traefik.http.services.mise-docs.loadbalancer.server.port: "80"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+volumes: 
+  pg_keycloak_data:
+  pg_restaurant_data:
+  pg_menu_data:
+  pg_order_data:
+  pg_kitchen_data:
+  dragonfly_data:
+  nats_data:
+
+
+networks:
+  default:
+    name: mise-core

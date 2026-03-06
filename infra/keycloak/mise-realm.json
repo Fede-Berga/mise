@@ -1,0 +1,185 @@
+{
+    "realm": "mise",
+    "enabled": true,
+    "sslRequired": "none",
+    "registrationAllowed": false,
+    "loginWithEmailAllowed": true,
+    "duplicateEmailsAllowed": false,
+    "roles": {
+        "realm": [
+            {
+                "name": "owner",
+                "description": "Restaurant owner — full access, multiple restaurants"
+            },
+            {
+                "name": "manager",
+                "description": "Shift manager — dashboard, menu, orders, kitchen"
+            },
+            {
+                "name": "chef",
+                "description": "Kitchen staff — kitchen display only"
+            },
+            {
+                "name": "waiter",
+                "description": "Front-of-house — create and view orders"
+            },
+            {
+                "name": "cashier",
+                "description": "Cashier — settle and close orders"
+            }
+        ]
+    },
+    "clients": [
+        {
+            "clientId": "mise-web",
+            "enabled": true,
+            "publicClient": false,
+            "secret": "mise-web-secret",
+            "standardFlowEnabled": true,
+            "directAccessGrantsEnabled": true,
+            "redirectUris": [
+                "http://localhost:3000/*",
+                "http://mise-web:3000/*"
+            ],
+            "webOrigins": [
+                "+"
+            ],
+            "protocol": "openid-connect",
+            "protocolMappers": [
+                {
+                    "name": "restaurant-ids-mapper",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-attribute-mapper",
+                    "config": {
+                        "user.attribute": "restaurant_ids",
+                        "claim.name": "restaurant_ids",
+                        "jsonType.label": "String",
+                        "multivalued": "true",
+                        "aggregate.attrs": "true",
+                        "access.token.claim": "true",
+                        "id.token.claim": "true",
+                        "userinfo.token.claim": "true"
+                    }
+                }
+            ]
+        }
+    ],
+    "users": [
+        {
+            "username": "owner",
+            "email": "owner@mise.app",
+            "firstName": "Alex",
+            "lastName": "Owner",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "mise1234",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "owner"
+            ],
+            "attributes": {
+                "restaurant_ids": [
+                    "restaurant-0001",
+                    "restaurant-0002"
+                ]
+            }
+        },
+        {
+            "username": "manager",
+            "email": "manager@mise.app",
+            "firstName": "Sam",
+            "lastName": "Manager",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "mise1234",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "manager"
+            ],
+            "attributes": {
+                "restaurant_ids": [
+                    "restaurant-0001"
+                ]
+            }
+        },
+        {
+            "username": "chef",
+            "email": "chef@mise.app",
+            "firstName": "Jo",
+            "lastName": "Chef",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "mise1234",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "chef"
+            ],
+            "attributes": {
+                "restaurant_ids": [
+                    "restaurant-0001"
+                ]
+            }
+        },
+        {
+            "username": "waiter",
+            "email": "waiter@mise.app",
+            "firstName": "Robin",
+            "lastName": "Waiter",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "mise1234",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "waiter"
+            ],
+            "attributes": {
+                "restaurant_ids": [
+                    "restaurant-0001"
+                ]
+            }
+        },
+        {
+            "username": "cashier",
+            "email": "cashier@mise.app",
+            "firstName": "Taylor",
+            "lastName": "Cashier",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "mise1234",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "cashier"
+            ],
+            "attributes": {
+                "restaurant_ids": [
+                    "restaurant-0001"
+                ]
+            }
+        }
+    ]
+}
