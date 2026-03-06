@@ -12,7 +12,7 @@ COMMON_APP_PATH = Path(__file__).resolve().parents[2] / "common" / "app"
 if str(SERVICE_APP_PATH.parent) not in sys.path:
     sys.path.insert(0, str(SERVICE_APP_PATH.parent))
 if str(COMMON_APP_PATH.parent) not in sys.path:
-    sys.path.insert(0, str(COMMON_APP_PATH.parent))
+    sys.path.append(str(COMMON_APP_PATH.parent))
 
 from app.api.schemas import MenuItemCreate  # noqa: E402
 from app.domain.services import MenuService  # noqa: E402

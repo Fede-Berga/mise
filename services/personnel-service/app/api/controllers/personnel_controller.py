@@ -63,8 +63,12 @@ def list_staff(
     return service.list_staff(include_inactive=include_inactive, skip=pagination.skip, limit=pagination.limit)
 
 
-@router.post("/staff/", response_model=StaffMemberRead, status_code=status.HTTP_201_CREATED, summary="Add a staff member")
-def create_staff_member(payload: StaffMemberCreate, service: PersonnelService = Depends(_get_service)) -> StaffMemberRead:
+@router.post(
+    "/staff/", response_model=StaffMemberRead, status_code=status.HTTP_201_CREATED, summary="Add a staff member"
+)
+def create_staff_member(
+    payload: StaffMemberCreate, service: PersonnelService = Depends(_get_service)
+) -> StaffMemberRead:
     """Add a new staff member."""
     try:
         return service.create_staff_member(payload)

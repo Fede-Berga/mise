@@ -31,9 +31,7 @@ class Order(TimestampMixin, Base):
     total_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    items: Mapped[list["OrderItem"]] = relationship(
-        "OrderItem", back_populates="order", cascade="all, delete-orphan"
-    )
+    items: Mapped[list["OrderItem"]] = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
 
 class OrderItem(Base):
@@ -46,9 +44,7 @@ class OrderItem(Base):
     __tablename__ = "order_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    order_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
-    )
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     menu_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

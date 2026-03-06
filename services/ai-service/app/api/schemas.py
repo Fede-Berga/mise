@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel
 
 
@@ -21,4 +20,3 @@ class GeneratedCategory(BaseModel):
 
 class MenuGenResponse(BaseModel):
     categories: list[GeneratedCategory]
-

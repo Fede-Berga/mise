@@ -20,10 +20,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class OrderStatus(str, Enum):
     """Lifecycle status of a customer order."""
 
-    NEW = "NEW"                     # Placed, awaiting kitchen acknowledgement
+    NEW = "NEW"  # Placed, awaiting kitchen acknowledgement
     IN_PREPARATION = "IN_PREPARATION"  # Kitchen is working on it
-    READY = "READY"                 # Items ready for service
-    CLOSED = "CLOSED"               # Delivered and paid
+    READY = "READY"  # Items ready for service
+    CLOSED = "CLOSED"  # Delivered and paid
 
 
 class OrderItemBase(BaseModel):

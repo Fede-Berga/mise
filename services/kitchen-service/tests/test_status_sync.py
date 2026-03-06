@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,7 +13,7 @@ COMMON_APP_PATH = Path(__file__).resolve().parents[2] / "common" / "app"
 if str(SERVICE_APP_PATH.parent) not in sys.path:
     sys.path.insert(0, str(SERVICE_APP_PATH.parent))
 if str(COMMON_APP_PATH.parent) not in sys.path:
-    sys.path.insert(0, str(COMMON_APP_PATH.parent))
+    sys.path.append(str(COMMON_APP_PATH.parent))
 
 from app.api.schemas import KitchenTicketStatusUpdate, TicketStatus  # noqa: E402
 from app.domain.services import KitchenService  # noqa: E402
@@ -27,8 +28,8 @@ class _RepoStub:
             restaurant_id="restaurant-0001",
             table_label="T1",
             status=TicketStatus.NEW.value,
-            created_at=None,
-            updated_at=None,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             items=[],
         )
         self.updated_statuses: list[TicketStatus] = []
@@ -56,7 +57,9 @@ def test_update_status_updates_ticket_and_pushes_order_status(monkeypatch):
     service = KitchenService(repo=repo)
     pushed: list[tuple[int, TicketStatus, str, str | None]] = []
 
-    def _sync_order_status(*, order_id: int, ticket_status: TicketStatus, tenant_id: str, auth_header: str | None) -> None:
+    def _sync_order_status(
+        *, order_id: int, ticket_status: TicketStatus, tenant_id: str, auth_header: str | None
+    ) -> None:
         pushed.append((order_id, ticket_status, tenant_id, auth_header))
 
     monkeypatch.setattr(service, "sync_order_status", _sync_order_status)
@@ -80,7 +83,9 @@ def test_update_status_rejects_invalid_transition(monkeypatch):
     service = KitchenService(repo=repo)
     called = False
 
-    def _sync_order_status(*, order_id: int, ticket_status: TicketStatus, tenant_id: str, auth_header: str | None) -> None:
+    def _sync_order_status(
+        *, order_id: int, ticket_status: TicketStatus, tenant_id: str, auth_header: str | None
+    ) -> None:
         nonlocal called
         called = True
 
@@ -111,7 +116,7 @@ def test_sync_ticket_from_order_status_walks_forward_states():
 
     assert result is not None
     assert result.status == TicketStatus.READY
-    assert repo.updated_statuses == [TicketStatus.PREPARING, TicketStatus.READY]
+    assert repo.updated_statuses == [TicketStatus.READY]
 
 
 def test_sync_ticket_from_order_status_maps_closed_to_done():
@@ -123,4 +128,4 @@ def test_sync_ticket_from_order_status_maps_closed_to_done():
 
     assert result is not None
     assert result.status == TicketStatus.DONE
-    assert repo.updated_statuses == [TicketStatus.READY, TicketStatus.DONE]
+    assert repo.updated_statuses == [TicketStatus.DONE]

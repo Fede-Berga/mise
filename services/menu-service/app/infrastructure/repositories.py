@@ -23,9 +23,7 @@ class MenuRepository:
         return self._db.execute(stmt).scalars().all()
 
     def get_item(self, item_id: int) -> MenuItem | None:
-        stmt = select(MenuItem).where(
-            MenuItem.id == item_id, MenuItem.tenant_id == self._tenant_id
-        )
+        stmt = select(MenuItem).where(MenuItem.id == item_id, MenuItem.tenant_id == self._tenant_id)
         return self._db.execute(stmt).scalar_one_or_none()
 
     def create_item(self, data: MenuItemCreate) -> MenuItem:

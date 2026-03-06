@@ -38,7 +38,9 @@ def list_items(
     return service.list_items(skip=pagination.skip, limit=pagination.limit)
 
 
-@router.post("/", response_model=InventoryItemRead, status_code=status.HTTP_201_CREATED, summary="Create inventory item")
+@router.post(
+    "/", response_model=InventoryItemRead, status_code=status.HTTP_201_CREATED, summary="Create inventory item"
+)
 def create_item(
     payload: InventoryItemCreate,
     service: InventoryService = Depends(_get_service),
@@ -82,7 +84,12 @@ def delete_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found")
 
 
-@router.post("/{item_id}/movements", response_model=StockMovementRead, status_code=status.HTTP_201_CREATED, summary="Record stock movement")
+@router.post(
+    "/{item_id}/movements",
+    response_model=StockMovementRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record stock movement",
+)
 def record_movement(
     item_id: int,
     payload: StockMovementCreate,

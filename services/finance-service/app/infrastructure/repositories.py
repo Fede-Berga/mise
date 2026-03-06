@@ -72,14 +72,11 @@ class FinanceRepository:
         """Return (total_income, total_expense, count) for a given restaurant on a given day."""
         start = datetime.combine(day, datetime.min.time())
         end = datetime.combine(day, datetime.max.time())
-        base = (
-            select(Transaction)
-            .where(
-                Transaction.tenant_id == self._tenant_id,
-                Transaction.restaurant_id == restaurant_id,
-                Transaction.occurred_at >= start,
-                Transaction.occurred_at <= end,
-            )
+        base = select(Transaction).where(
+            Transaction.tenant_id == self._tenant_id,
+            Transaction.restaurant_id == restaurant_id,
+            Transaction.occurred_at >= start,
+            Transaction.occurred_at <= end,
         )
         rows = list(self._db.execute(base).scalars().all())
         total_income = sum(r.amount for r in rows if r.transaction_type == TransactionType.INCOME.value)

@@ -23,9 +23,7 @@ class AnalyticsRepository:
         self._db = db
         self._tenant_id = tenant_id
 
-    def get_stats_for_period(
-        self, restaurant_id: str, start: datetime, end: datetime
-    ) -> tuple[int, float]:
+    def get_stats_for_period(self, restaurant_id: str, start: datetime, end: datetime) -> tuple[int, float]:
         """Return (orders_count, revenue) for a given restaurant in a date range."""
         stmt = text(
             """
@@ -49,9 +47,7 @@ class AnalyticsRepository:
         ).one()
         return int(row.orders_count or 0), float(row.revenue or 0.0)
 
-    def get_daily_breakdown(
-        self, restaurant_id: str, start: datetime, end: datetime
-    ) -> list[tuple[date, int, float]]:
+    def get_daily_breakdown(self, restaurant_id: str, start: datetime, end: datetime) -> list[tuple[date, int, float]]:
         """Return per-day (date, orders_count, revenue) tuples for the given period."""
         stmt = text(
             """

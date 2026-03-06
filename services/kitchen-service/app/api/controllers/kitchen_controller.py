@@ -46,7 +46,9 @@ def list_tickets(
     )
 
 
-@router.post("/", response_model=KitchenTicketRead, status_code=status.HTTP_201_CREATED, summary="Create a kitchen ticket")
+@router.post(
+    "/", response_model=KitchenTicketRead, status_code=status.HTTP_201_CREATED, summary="Create a kitchen ticket"
+)
 def create_ticket(
     payload: KitchenTicketCreate,
     service: KitchenService = Depends(_get_service),
