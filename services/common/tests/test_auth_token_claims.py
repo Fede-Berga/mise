@@ -8,6 +8,8 @@ from fastapi import HTTPException
 from common.app import auth
 from common.app.config import Settings
 
+FAKE_TOKEN = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3QifQ.eyJzdWIiOiJ1c2VyLTEifQ.c2ln"  # noqa: S105
+
 
 @pytest.fixture
 def settings() -> Settings:
@@ -39,7 +41,7 @@ def test_decode_token_accepts_azp_when_aud_not_matching(monkeypatch, settings, p
     }
     monkeypatch.setattr(auth.jwt, "decode", lambda *args, **kwargs: claims)
 
-    decoded = auth._decode_token("a.b.c", settings)
+    decoded = auth._decode_token(FAKE_TOKEN, settings)
 
     assert decoded["azp"] == "mise-web"
 
@@ -56,7 +58,7 @@ def test_decode_token_rejects_when_neither_aud_nor_azp_match(monkeypatch, settin
     monkeypatch.setattr(auth.jwt, "decode", lambda *args, **kwargs: claims)
 
     with pytest.raises(HTTPException) as exc:
-        auth._decode_token("a.b.c", settings)
+        auth._decode_token(FAKE_TOKEN, settings)
 
     assert exc.value.status_code == 401
     assert exc.value.detail == "Invalid authentication token audience"

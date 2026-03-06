@@ -51,6 +51,7 @@ class StockMovement(Base):
 
     # Only created_at; movements are immutable so no updated_at needed
     from sqlalchemy import DateTime, func
+
     created_at: Mapped["datetime"] = mapped_column(  # type: ignore[name-defined]
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

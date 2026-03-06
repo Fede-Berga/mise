@@ -15,9 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class MovementType(str, Enum):
     """Direction of stock movement."""
 
-    IN = "IN"   # Receiving new stock (e.g. supplier delivery)
-    OUT = "OUT" # Consuming stock (e.g. ingredient used in service)
-    WASTE = "WASTE"   # Spoilage / breakage
+    IN = "IN"  # Receiving new stock (e.g. supplier delivery)
+    OUT = "OUT"  # Consuming stock (e.g. ingredient used in service)
+    WASTE = "WASTE"  # Spoilage / breakage
     ADJUSTMENT = "ADJUSTMENT"  # Manual correction
 
 

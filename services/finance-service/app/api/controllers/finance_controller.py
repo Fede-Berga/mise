@@ -50,7 +50,12 @@ def list_transactions(
     )
 
 
-@router.post("/transactions/", response_model=TransactionRead, status_code=status.HTTP_201_CREATED, summary="Record a transaction")
+@router.post(
+    "/transactions/",
+    response_model=TransactionRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a transaction",
+)
 def record_transaction(payload: TransactionCreate, service: FinanceService = Depends(_get_service)) -> TransactionRead:
     """Record a new financial transaction (income or expense)."""
     return service.record_transaction(payload)

@@ -18,10 +18,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class TicketStatus(str, Enum):
     """Lifecycle status of a kitchen ticket."""
 
-    NEW = "NEW"             # Just received, not yet acknowledged
-    PREPARING = "PREPARING" # Cook has started preparing
-    READY = "READY"         # Dishes ready for pick-up / delivery
-    DONE = "DONE"           # Delivered to the table / closed
+    NEW = "NEW"  # Just received, not yet acknowledged
+    PREPARING = "PREPARING"  # Cook has started preparing
+    READY = "READY"  # Dishes ready for pick-up / delivery
+    DONE = "DONE"  # Delivered to the table / closed
 
 
 class TicketItemBase(BaseModel):

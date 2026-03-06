@@ -64,14 +64,16 @@ test: ## Run backend tests
 	@set -e; \
 	for svc in services/common $(PY_SERVICE_DIRS); do \
 		echo "==> $$svc"; \
-		(cd $$svc && pytest tests --tb=short -q); \
+		(cd $$svc && PYTHONPATH=$(CURDIR)/services pytest tests --tb=short -q) || \
+		([ $$? -eq 5 ] && echo "No tests collected in $$svc; skipping."); \
 	done
 
 test-cov: ## Run backend tests with coverage
 	@set -e; \
 	for svc in services/common $(PY_SERVICE_DIRS); do \
 		echo "==> $$svc"; \
-		(cd $$svc && pytest tests --cov=app --cov-report=term-missing); \
+		(cd $$svc && PYTHONPATH=$(CURDIR)/services pytest tests --cov=app --cov-report=term-missing) || \
+		([ $$? -eq 5 ] && echo "No tests collected in $$svc; skipping."); \
 	done
 
 test-web: ## Run web tests

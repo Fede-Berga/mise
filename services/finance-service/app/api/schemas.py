@@ -15,8 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class TransactionType(str, Enum):
     """Direction of a financial transaction."""
 
-    INCOME = "INCOME"   # Revenue: e.g. table order payment
-    EXPENSE = "EXPENSE" # Cost: e.g. supplier invoice, staff wage
+    INCOME = "INCOME"  # Revenue: e.g. table order payment
+    EXPENSE = "EXPENSE"  # Cost: e.g. supplier invoice, staff wage
 
 
 class TransactionBase(BaseModel):
@@ -26,7 +26,9 @@ class TransactionBase(BaseModel):
     transaction_type: TransactionType
     amount: float = Field(..., gt=0, description="Transaction amount in the restaurant's currency")
     description: str = Field(..., max_length=512, description="Human-readable description, e.g. 'Order #42 payment'")
-    reference: str | None = Field(None, max_length=128, description="External reference, e.g. order id or invoice number")
+    reference: str | None = Field(
+        None, max_length=128, description="External reference, e.g. order id or invoice number"
+    )
     occurred_at: datetime | None = Field(None, description="When the transaction occurred; defaults to now")
 
 

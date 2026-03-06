@@ -50,7 +50,9 @@ def get_device(device_id: int, service: HardwareService = Depends(_get_service))
 
 
 @router.patch("/{device_id}", response_model=DeviceRead, summary="Update a device")
-def update_device(device_id: int, payload: DeviceUpdate, service: HardwareService = Depends(_get_service)) -> DeviceRead:
+def update_device(
+    device_id: int, payload: DeviceUpdate, service: HardwareService = Depends(_get_service)
+) -> DeviceRead:
     """Partially update device metadata (name, location, status)."""
     device = service.update_device(device_id, payload)
     if not device:

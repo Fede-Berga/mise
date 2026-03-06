@@ -128,8 +128,7 @@ class KitchenService:
         if data.status not in _VALID_TRANSITIONS[current]:
             allowed = ", ".join(s.value for s in _VALID_TRANSITIONS[current]) or "none (terminal state)"
             raise ValueError(
-                f"Cannot transition from {current.value} to {data.status.value}. "
-                f"Allowed next states: {allowed}"
+                f"Cannot transition from {current.value} to {data.status.value}. Allowed next states: {allowed}"
             )
 
         # Keep order-service and kitchen-service statuses aligned.

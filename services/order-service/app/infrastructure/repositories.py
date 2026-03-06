@@ -77,13 +77,15 @@ class OrderRepository:
             unit_price = item_prices.get(item_data.menu_item_id, 0.0)
             line_total = round(unit_price * item_data.quantity, 2)
             total += line_total
-            self._db.add(OrderItem(
-                order_id=order.id,
-                menu_item_id=item_data.menu_item_id,
-                quantity=item_data.quantity,
-                unit_price=unit_price,
-                line_total=line_total,
-            ))
+            self._db.add(
+                OrderItem(
+                    order_id=order.id,
+                    menu_item_id=item_data.menu_item_id,
+                    quantity=item_data.quantity,
+                    unit_price=unit_price,
+                    line_total=line_total,
+                )
+            )
 
         order.total_amount = round(total, 2)
         self._db.commit()

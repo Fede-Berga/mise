@@ -49,9 +49,7 @@ def list_orders(
     return list(service.list_orders(status=status))
 
 
-@router.post(
-    "/", response_model=OrderRead, status_code=status.HTTP_201_CREATED, summary="Place an order"
-)
+@router.post("/", response_model=OrderRead, status_code=status.HTTP_201_CREATED, summary="Place an order")
 def create_order(
     request: Request,
     payload: OrderCreate,

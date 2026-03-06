@@ -66,7 +66,10 @@ class PersonnelService:
     # ------------------------------------------------------------------
 
     def list_staff(self, *, include_inactive: bool = False, skip: int = 0, limit: int = 50) -> list[StaffMemberRead]:
-        return [self._staff_to_read(m) for m in self._personnel.list(include_inactive=include_inactive, skip=skip, limit=limit)]
+        return [
+            self._staff_to_read(m)
+            for m in self._personnel.list(include_inactive=include_inactive, skip=skip, limit=limit)
+        ]
 
     def get_staff_member(self, staff_id: int) -> StaffMemberRead | None:
         member = self._personnel.get(staff_id)

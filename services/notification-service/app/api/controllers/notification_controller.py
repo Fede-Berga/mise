@@ -35,7 +35,9 @@ def list_notifications(
 
 
 @router.post("/", response_model=NotificationRead, status_code=status.HTTP_201_CREATED, summary="Send a notification")
-def send_notification(payload: NotificationCreate, service: NotificationService = Depends(_get_service)) -> NotificationRead:
+def send_notification(
+    payload: NotificationCreate, service: NotificationService = Depends(_get_service)
+) -> NotificationRead:
     """Send and log a notification to a recipient."""
     return service.send(payload)
 

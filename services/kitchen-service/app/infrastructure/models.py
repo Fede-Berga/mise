@@ -23,9 +23,7 @@ class KitchenTicket(TimestampMixin, Base):
     order_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     restaurant_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     table_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=TicketStatus.NEW.value
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=TicketStatus.NEW.value)
 
     items: Mapped[list["TicketItem"]] = relationship(
         "TicketItem", back_populates="ticket", cascade="all, delete-orphan"

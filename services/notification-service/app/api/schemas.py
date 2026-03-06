@@ -20,11 +20,11 @@ from pydantic import BaseModel, ConfigDict, Field
 class NotificationChannel(str, Enum):
     """Delivery channel for a notification."""
 
-    IN_APP = "IN_APP"       # Stored in DB, surfaced in the web UI
-    EMAIL = "EMAIL"         # Email (future: SMTP / SendGrid)
-    SMS = "SMS"             # SMS (future: Twilio)
-    PUSH = "PUSH"           # Mobile push (future: FCM)
-    WEBHOOK = "WEBHOOK"     # HTTP callback (future)
+    IN_APP = "IN_APP"  # Stored in DB, surfaced in the web UI
+    EMAIL = "EMAIL"  # Email (future: SMTP / SendGrid)
+    SMS = "SMS"  # SMS (future: Twilio)
+    PUSH = "PUSH"  # Mobile push (future: FCM)
+    WEBHOOK = "WEBHOOK"  # HTTP callback (future)
 
 
 class NotificationBase(BaseModel):

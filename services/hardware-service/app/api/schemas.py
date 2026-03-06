@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class DeviceType(str, Enum):
     """Category of hardware device."""
 
-    POS_TERMINAL = "POS_TERMINAL"     # Point-of-sale touch screen
+    POS_TERMINAL = "POS_TERMINAL"  # Point-of-sale touch screen
     KITCHEN_DISPLAY = "KITCHEN_DISPLAY"  # KDS screen in the kitchen
     RECEIPT_PRINTER = "RECEIPT_PRINTER"  # Thermal ticket printer
     PAYMENT_TERMINAL = "PAYMENT_TERMINAL"  # Card reader (e.g. SumUp)

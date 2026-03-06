@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level, json_output=settings.log_json)
     if not settings.log_json:
         from common.app.database import Base, engine  # noqa: PLC0415
+
         Base.metadata.create_all(bind=engine)
     yield
 

@@ -59,13 +59,15 @@ class KitchenRepository:
         self._db.flush()  # get ticket.id before creating items
 
         for item_data in data.items:
-            self._db.add(TicketItem(
-                ticket_id=ticket.id,
-                menu_item_id=item_data.menu_item_id,
-                menu_item_name=item_data.menu_item_name,
-                quantity=item_data.quantity,
-                notes=item_data.notes,
-            ))
+            self._db.add(
+                TicketItem(
+                    ticket_id=ticket.id,
+                    menu_item_id=item_data.menu_item_id,
+                    menu_item_name=item_data.menu_item_name,
+                    quantity=item_data.quantity,
+                    notes=item_data.notes,
+                )
+            )
 
         self._db.commit()
         self._db.refresh(ticket)

@@ -18,10 +18,7 @@ class NotificationRepository:
 
     def list(self, *, recipient_id: str | None = None, skip: int = 0, limit: int = 50) -> list[Notification]:
         """List recent notifications, optionally filtered by recipient."""
-        stmt = (
-            select(Notification)
-            .where(Notification.tenant_id == self._tenant_id)
-        )
+        stmt = select(Notification).where(Notification.tenant_id == self._tenant_id)
         if recipient_id:
             stmt = stmt.where(Notification.recipient_id == recipient_id)
         stmt = stmt.order_by(Notification.id.desc()).offset(skip).limit(limit)
