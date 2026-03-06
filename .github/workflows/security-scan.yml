@@ -43,7 +43,7 @@ jobs:
         run: docker build -f services/menu-service/Dockerfile -t mise-menu-svc:scan .
 
       - name: Scan menu-service image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: "mise-menu-svc:scan"
           severity: "CRITICAL,HIGH"
