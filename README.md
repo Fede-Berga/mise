@@ -1,178 +1,101 @@
-# Mise Platform
+# Mise
 
-Mise is a multi-tenant restaurant operations platform built as a set of FastAPI microservices with a Next.js cockpit.  
-The MVP focuses on one high-value workflow implemented end-to-end: **order entry, kitchen ticketing, and bidirectional status synchronization**.
+Mise is a multi-tenant restaurant operations platform (menus, orders, kitchen tickets) built from FastAPI microservices and a Next.js web app; it is unrelated to the `mise` developer-tool version manager.
 
-## Product Scope (Current MVP)
+[![CI](https://github.com/Fede-Berga/mise/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Fede-Berga/mise/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/Fede-Berga/mise)](LICENSE)
+![Python 3.13](https://img.shields.io/badge/python-3.13-blue)
 
-- Role-based cockpit access (`owner`, `manager`, `chef`, `waiter`, `cashier`)
+The MVP implements one workflow end to end: **order entry, kitchen ticketing, and two-way status synchronisation between orders and kitchen tickets**.
+
+## Scope of the MVP
+
+- Role-based web access for `owner`, `manager`, `chef`, `waiter` and `cashier`
 - Menu management
-- Order creation from UI
-- Automatic kitchen ticket generation from order events
-- Order status and kitchen status synchronization (both directions)
-- Tenant/restaurant context isolation through authenticated request forwarding
+- Order creation from the web app
+- Kitchen tickets created automatically from order events
+- Order and kitchen status kept in sync in both directions
+- Tenant (restaurant) isolation through authenticated request forwarding
 
-## Architecture Snapshot
+## Quick start
 
-### Services
-
-- `restaurant-svc`
-- `menu-svc`
-- `order-svc`
-- `kitchen-svc`
-- shared library in `services/common`
-
-### Platform Components
-
-- `mise-web` (Next.js 14)
-- `keycloak` for authentication and role claims
-- `nats` (JetStream) for eventing
-- per-service PostgreSQL instances
-- `dragonfly` (Redis-compatible)
-- `traefik`
-
-### Core Event Subjects
-
-- `mise.orders.placed`
-- `mise.orders.status_changed`
-
-## Repository Layout
-
-- `services/` backend microservices and shared code
-- `mise-web/` frontend cockpit
-- `infra/docker/` local stack definitions
-- `docs/` technical and operational documentation
-- `mkdocs.yml` documentation site configuration
-
-## Quickstart (Local)
-
-### Prerequisites
-
-- Docker + Docker Compose v2
-- Python 3
-- Node.js 24 (for local web development/builds)
-- `make`
-
-### Run
+Prerequisites: Docker with Compose v2, `make`, about 8 GB of RAM for the core stack. For local development without Docker: Python 3.13 and Node.js 24.
 
 ```bash
 cp .env.example .env
 make up-core
 ```
 
-Provisioning jobs (if you want to run them explicitly):
+`make up-core` builds the images and starts the core stack from [`infra/docker/docker-compose.core.yml`](infra/docker/docker-compose.core.yml). The Alembic migrations and the demo seed data run as one-shot containers before the services and the web app start; `make init-db` and `make seed` rerun them on their own.
 
-```bash
-make init-db
-make seed
+| What | URL |
+| --- | --- |
+| Web app | http://localhost:3000 |
+| Documentation site | http://localhost:3010 (or http://localhost/docs through Traefik) |
+| Keycloak | http://localhost:8080/auth |
+| Service health | http://localhost:8001/healthz to http://localhost:8004/healthz |
+
+The imported Keycloak realm ([`infra/keycloak/mise-realm.json`](infra/keycloak/mise-realm.json)) defines one demo user per role. The role access matrix is in [`docs/getting-started/roles.md`](docs/getting-started/roles.md).
+
+`make smoke-core` checks the health endpoints, the web app and the docs site; `make down` stops the stack.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    browser["Browser"] --> traefik["Traefik"]
+    browser -- "OIDC login" --> keycloak["Keycloak"]
+    traefik --> web["mise-web (Next.js)"]
+    traefik -- "/docs" --> docs["mise-docs (MkDocs)"]
+    web -- "/api proxy + JWT + X-Tenant-Id" --> restaurant["restaurant-svc"]
+    web --> menu["menu-svc"]
+    web --> order["order-svc"]
+    web --> kitchen["kitchen-svc"]
+    order -- "price lookup" --> menu
+    order -- "mise.orders.placed<br/>mise.orders.status_changed" --> nats[("NATS JetStream")]
+    nats --> kitchen
+    kitchen -- "PATCH order status" --> order
+    menu -- "menu cache" --> dragonfly[("Dragonfly")]
+    order -- "idempotency, rate limit, locks" --> dragonfly
+    restaurant --> pgr[("Postgres: restaurant")]
+    menu --> pgm[("Postgres: menu")]
+    order --> pgo[("Postgres: order")]
+    kitchen --> pgk[("Postgres: kitchen")]
+    keycloak --> pgkc[("Postgres: keycloak")]
 ```
 
-### Health Checks
+- Each core service owns its database (one Postgres container per service) and its Alembic migrations. Shared code (settings, JWT validation, tenant dependency, NATS and Dragonfly helpers, health routes) lives in [`services/common`](services/common).
+- The web app proxies `/api/<service>/...` to the services, adding the user's access token and the active restaurant as `X-Tenant-Id`. The services validate the JWT against Keycloak's signing keys, check the audience (`aud` or `azp`) and reject a tenant header that does not match the token.
+- `order-svc` publishes `mise.orders.placed` and `mise.orders.status_changed`; `kitchen-svc` consumes both through durable JetStream consumers to create tickets and align their status. Ticket status changes go back to `order-svc` over HTTP.
+- `order-svc` accepts an `Idempotency-Key` header, rate-limits order creation per tenant and caller, and serialises status updates with a short-lived lock, all backed by Dragonfly.
+
+Repository layout: `services/` (backend services and shared code), `mise-web/` (Next.js 14 app), `infra/` (Compose files, Keycloak realm, scripts), `docs/` (MkDocs site, configured in [`mkdocs.yml`](mkdocs.yml)).
+
+## Running the tests
 
 ```bash
-curl -sf http://localhost:8001/healthz
-curl -sf http://localhost:8002/healthz
-curl -sf http://localhost:8003/healthz
-curl -sf http://localhost:8004/healthz
-curl -sf http://localhost:3000
+make install-dev     # pip install -r services/common/requirements-dev.txt
+make lint            # ruff check, per service
+make format-check    # ruff format --check, per service
+make test            # pytest, per service
+make typecheck       # mypy (not yet clean; non-blocking in CI)
 ```
 
-### Access
+The backend suite is unit-level and needs no running infrastructure: JWT claim validation in `services/common`, menu caching in `menu-svc`, idempotency and status-update locking in `order-svc`, and status synchronisation in `kitchen-svc`. CI also runs `npm ci`, `npm run lint` and `npm run build` for `mise-web`. Before a release, the manual end-to-end checks in [`docs/qa/e2e-checklist.md`](docs/qa/e2e-checklist.md) cover login stability, the role matrix, order to ticket creation, status sync and restaurant switching.
 
-- Cockpit: `http://localhost:3000`
-- Docs (direct port): `http://localhost:3010`
-- Docs (via Traefik): `http://localhost/docs`
-- Keycloak: `http://localhost:8080`
+The documentation site builds with `make install-docs` and `make docs-build` (or `make docs-serve` for live reload).
 
-Stop:
+## Design decisions and limitations
 
-```bash
-make down
-```
+- Only the four core services (restaurant, menu, order, kitchen) are wired into the core stack and covered by tests. The other services under `services/` and [`docker-compose.full.yml`](infra/docker/docker-compose.full.yml) (inventory, personnel, finance, notification, analytics, AI, hardware, plus MinIO, ClickHouse and Meilisearch) are not part of the core stack and have no migrations or tests.
+- Tenant isolation is enforced in application code: repositories scope queries by `tenant_id`, and the tenant header must match the token. The migrations do not create Postgres row-level security policies.
+- Events are published after the database write without an outbox, and publish failures are only logged, so an event can be lost.
+- `make typecheck` currently reports mypy errors; CI runs it with `continue-on-error`.
+- The Compose setup is for local development: Keycloak runs in `start-dev` mode, Traefik's dashboard is insecure, and the defaults in `.env.example` are development credentials.
+- There is no web test suite yet; the web app is checked by lint and a production build.
 
-## Development Workflow
-
-### Install Tooling
-
-```bash
-make install-dev
-make install-web
-make install-docs
-```
-
-### Quality Gates
-
-```bash
-make lint
-make typecheck
-make test
-npm --prefix mise-web run build
-make docs-build
-```
-
-## Documentation (Open Source Stack)
-
-Documentation is built with:
-
-- [MkDocs](https://www.mkdocs.org/) (BSD)
-- [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) (MIT)
-
-Run locally:
-
-```bash
-make docs-serve
-```
-
-Build static site:
-
-```bash
-make docs-build
-```
-
-## Testing
-
-### Automated
-
-- Python unit tests (backend logic and auth validation)
-- Next.js production build validation
-
-Run:
-
-```bash
-make test
-```
-
-### Manual Release Checklist
-
-Use [`docs/qa/e2e-checklist.md`](docs/qa/e2e-checklist.md) before tagging a release.
-
-Key mandatory checks:
-
-1. Login/session stability (no recurring `401`)
-2. Role access matrix enforcement
-3. Order -> kitchen ticket creation
-4. Status sync consistency between Orders and Kitchen
-5. Tenant isolation with restaurant switching
-
-## Security and Multi-Tenancy
-
-- JWT validation with Keycloak signing keys
-- Audience/client validation (`aud` or `azp`)
-- Tenant header enforcement and auth-aware request forwarding
-- Role-based route protection in middleware
-
-## Contributing
-
-1. Create a branch from `develop` (or follow team workflow in docs).
-2. Implement change with tests.
-3. Run all local quality gates.
-4. Open PR with clear scope and risk notes.
-
-See:
-
-- [`docs/engineering/git-workflow.md`](docs/engineering/git-workflow.md)
-- [`docs/contributing/extensibility.md`](docs/contributing/extensibility.md)
+Further documentation: [`docs/engineering/git-workflow.md`](docs/engineering/git-workflow.md), [`docs/contributing/extensibility.md`](docs/contributing/extensibility.md), [`docs/deployment/kind-rocky.md`](docs/deployment/kind-rocky.md).
 
 ## License
 
-This project is released under the [GNU GPL v3.0 License](LICENSE).
+[GPL-3.0-only](LICENSE): GNU General Public License, version 3 only.
