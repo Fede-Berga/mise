@@ -47,7 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gzip -c trivy-container.sarif | base64 -w0 > trivy-container.sarif.gz.b64
+          jq '.runs[].automationDetails.id = "trivy-image/"' trivy-container.sarif | gzip -c | base64 -w0 > trivy-container.sarif.gz.b64
           gh api "repos/${GITHUB_REPOSITORY}/code-scanning/sarifs" \
             -f commit_sha="$GITHUB_SHA" \
             -f ref="$GITHUB_REF" \
