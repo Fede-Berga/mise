@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS base
+FROM node:25-bookworm-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -32,7 +32,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY mise-web/ .
 RUN npm run build
 
-FROM node:24-bookworm-slim AS runner
+FROM node:25-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
