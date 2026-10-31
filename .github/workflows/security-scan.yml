@@ -6,53 +6,49 @@ on:
   workflow_dispatch:
 
 permissions:
-  security-events: write
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  codeql:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ["python", "javascript"]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
-
   trivy-images:
     name: Trivy Container Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build menu-service image
         run: docker build -f services/menu-service/Dockerfile -t mise-menu-svc:scan .
 
       - name: Scan menu-service image
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: "mise-menu-svc:scan"
-          severity: "CRITICAL,HIGH"
-          exit-code: "0"
-          format: "sarif"
-          output: "trivy-container.sarif"
+        run: >-
+          docker run --rm
+          -v /var/run/docker.sock:/var/run/docker.sock
+          -v "$PWD:/work" -w /work
+          "$TRIVY_IMAGE" image
+          --severity CRITICAL,HIGH
+          --exit-code 0
+          --format sarif
+          --output trivy-container.sarif
+          mise-menu-svc:scan
 
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: "trivy-container.sarif"
+      - name: Upload results to code scanning
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq '.runs[].automationDetails.id = "trivy-image/"' trivy-container.sarif | gzip -c | base64 -w0 > trivy-container.sarif.gz.b64
+          gh api "repos/${GITHUB_REPOSITORY}/code-scanning/sarifs" \
+            -f commit_sha="$GITHUB_SHA" \
+            -f ref="$GITHUB_REF" \
+            -F sarif=@trivy-container.sarif.gz.b64

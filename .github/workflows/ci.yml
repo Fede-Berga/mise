@@ -2,13 +2,11 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main]
   pull_request:
-    branches:
-      - main
-      - develop
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,20 +15,23 @@ concurrency:
 jobs:
   backend-lint:
     name: Backend Lint & Format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: services/common/requirements*.txt
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r services/common/requirements-dev.txt
+        run: python -m pip install -r services/common/requirements-dev.txt
 
       - name: Lint
         run: make lint
@@ -40,20 +41,23 @@ jobs:
 
   backend-typecheck:
     name: Backend Type Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: services/common/requirements*.txt
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r services/common/requirements-dev.txt
+        run: python -m pip install -r services/common/requirements-dev.txt
 
       - name: Typecheck
         run: make typecheck
@@ -61,74 +65,87 @@ jobs:
 
   backend-test:
     name: Backend Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: services/common/requirements*.txt
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r services/common/requirements.txt
-          pip install -r services/common/requirements-dev.txt
+        run: python -m pip install -r services/common/requirements-dev.txt
 
       - name: Run tests
         run: make test
 
   web:
     name: Web (Next.js)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container: node:24-bookworm-slim
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mise-web
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: mise-web/package-lock.json
+          persist-credentials: false
 
-      - name: Install web dependencies
-        working-directory: mise-web
-        run: npm ci || npm install
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Lint web
-        working-directory: mise-web
+      - name: Lint
         run: npm run lint
 
-      - name: Build web
-        working-directory: mise-web
+      - name: Build
         run: npm run build
 
   security:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
+      contents: read
       security-events: write
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Run Trivy vulnerability scanner
-        id: trivy
-        uses: aquasecurity/trivy-action@0.28.0
+      - name: Run Trivy filesystem scan
         continue-on-error: true
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          severity: "CRITICAL,HIGH"
-          exit-code: "0"  # non-blocking initially
-          format: "sarif"
-          output: "trivy-results.sarif"
+        run: >-
+          docker run --rm
+          -v "$PWD:/work" -w /work
+          "$TRIVY_IMAGE" fs
+          --severity CRITICAL,HIGH
+          --exit-code 0
+          --format sarif
+          --output trivy-results.sarif
+          .
 
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always() && hashFiles('trivy-results.sarif') != ''
-        with:
-          sarif_file: "trivy-results.sarif"
+      - name: Upload results to code scanning
+        if: >-
+          always() && hashFiles('trivy-results.sarif') != '' &&
+          (github.event_name == 'push' ||
+          (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq '.runs[].automationDetails.id = "trivy-fs/"' trivy-results.sarif | gzip -c | base64 -w0 > trivy-results.sarif.gz.b64
+          gh api "repos/${GITHUB_REPOSITORY}/code-scanning/sarifs" \
+            -f commit_sha="$GITHUB_SHA" \
+            -f ref="$GITHUB_REF" \
+            -F sarif=@trivy-results.sarif.gz.b64
