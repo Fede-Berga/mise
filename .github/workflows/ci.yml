@@ -108,3 +108,44 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Trivy filesystem scan
+        continue-on-error: true
+        run: >-
+          docker run --rm
+          -v "$PWD:/work" -w /work
+          "$TRIVY_IMAGE" fs
+          --severity CRITICAL,HIGH
+          --exit-code 0
+          --format sarif
+          --output trivy-results.sarif
+          .
+
+      - name: Upload results to code scanning
+        if: >-
+          always() && hashFiles('trivy-results.sarif') != '' &&
+          (github.event_name == 'push' ||
+          (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq '.runs[].automationDetails.id = "trivy-fs/"' trivy-results.sarif | gzip -c | base64 -w0 > trivy-results.sarif.gz.b64
+          gh api "repos/${GITHUB_REPOSITORY}/code-scanning/sarifs" \
+            -f commit_sha="$GITHUB_SHA" \
+            -f ref="$GITHUB_REF" \
+            -F sarif=@trivy-results.sarif.gz.b64
