@@ -1,17 +1,17 @@
 # Default owners for everything
-* @fbergamini
+* @Fede-Berga
 
 # Backend services
-/services/ @fbergamini
+/services/ @Fede-Berga
 
 # Web application
-/mise-web/ @fbergamini
+/mise-web/ @Fede-Berga
 
 # Infrastructure & deployment
-/infra/ @fbergamini
+/infra/ @Fede-Berga
 
 # CI/CD
-/.github/ @fbergamini
+/.github/ @Fede-Berga
 
 # Documentation
-/docs/ @fbergamini
+/docs/ @Fede-Berga

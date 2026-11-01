@@ -55,7 +55,7 @@ source ~/.bashrc
 Config file: `infra/kind/cluster-rocky.yaml`
 
 ```bash
-cd /home/fbergamini/Projects/personal/mise
+cd mise
 kind create cluster --config infra/kind/cluster-rocky.yaml
 
 kubectl cluster-info
