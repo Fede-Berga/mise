@@ -12,7 +12,7 @@ If you discover a security vulnerability in Mise, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email: **security@mise.dev** (or reach out via GitHub private vulnerability reporting).
+Instead, report it privately through [GitHub private vulnerability reporting](https://github.com/Fede-Berga/mise/security/advisories/new).
 
 ### What to include
 
