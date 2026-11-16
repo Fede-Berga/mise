@@ -159,7 +159,7 @@ services:
           memory: 256M
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.6
+    image: clickhouse/clickhouse-server:26.7
     container_name: mise-clickhouse
     ports:
       - "8123:8123"
@@ -179,7 +179,7 @@ services:
           memory: 512M
 
   meilisearch:
-    image: getmeili/meilisearch:v1.55
+    image: getmeili/meilisearch:v1.56
     container_name: mise-meilisearch
     environment:
       MEILI_NO_ANALYTICS: "true"
